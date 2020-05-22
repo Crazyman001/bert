@@ -374,6 +374,66 @@ class ColaProcessor(DataProcessor):
     return examples
 
 
+class QQPProcessor(DataProcessor):
+  """用于处理 Quora Question Pair 数据为输入模型的类 """
+
+  def get_train_examples(self, data_dir):
+    """读取训练数据并转换成 InputExample的格式"""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir,"train.tsv")), 'train')
+
+  def get_dev_examples(self, data_dir):
+    """读取验证集并转换成InputExample的格式"""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir,"dev.tsv")), 'dev')
+  
+  def get_test_examples(self, data_dir):
+    """读取测试集并转换成InputExample的格式"""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir,"test.tsv")), 'test')
+  
+  def get_predict_examples(self, sentence_pairs):
+    """获得数据, 转换成InputExample的格式"""
+    examples = []
+    for (i, qpair) in enumerate(sentence_pairs):
+      guid = "predict-%d" % (i)
+      # 转换成 utf-8的格式
+      text_a = tokenization.convert_to_unicode(qpair[0])
+      text_b = tokenization.convert_to_unicode(qpair[1])
+      # 给要预测的数据添加一个标签 0，因为为空不支持转化为输入格式
+      examples.append(
+          run_classifier.InputExample(guid=guid, text_a=text_a, text_b=text_b, label=0))
+    return examples
+  
+  def _create_examples(self, lines, set_type):
+    """Creates examples for the training, dev and test sets."""
+    examples = []
+    for (i, line) in enumerate(lines):
+      guid = "%s-%d" % (set_type, i)
+      if set_type=='test':
+        # 测试文件为三列，不是3列为无效列，忽略
+        if i == 0 or len(line)!=3:
+          print(guid, line)
+          continue
+        text_a = tokenization.convert_to_unicode(line[1])
+        text_b = tokenization.convert_to_unicode(line[2])
+        label = 0 # We will use zero for test as convert_example_to_features doesn't support None
+      else:
+        # 训练文件和验证文件为6列
+        if i == 0 or len(line)!=6:
+          continue
+        text_a = tokenization.convert_to_unicode(line[3])
+        text_b = tokenization.convert_to_unicode(line[4])
+        label = int(line[5])
+      examples.append(
+          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+    return examples
+
+  def get_labels(self):
+    "return class labels"
+    return [0,1]
+
+
 def convert_single_example(ex_index, example, label_list, max_seq_length,
                            tokenizer):
   """Converts a single `InputExample` into a single `InputFeatures`."""
@@ -788,6 +848,7 @@ def main(_):
       "mnli": MnliProcessor,
       "mrpc": MrpcProcessor,
       "xnli": XnliProcessor,
+      "qqp": QQPProcessor,
   }
 
   tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
